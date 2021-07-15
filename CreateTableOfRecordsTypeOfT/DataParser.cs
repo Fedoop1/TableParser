@@ -8,11 +8,23 @@ using System.Text;
 
 namespace CreateTableOfRecordsTypeOfT
 {
+    /// <summary>
+    /// Parse sequence if some class objects, parse it by public properties and make table from based on the received data.
+    /// </summary>
     public static class DataParser
     {
+        private const int CountOfAdditionalCharactersToEachEntry = 3;
         private static readonly Type[] ValidPropertiesTypes = new Type[] { typeof(DateTime), typeof(int), typeof(string), typeof(char) };
         private static readonly Type[] LeftPaddingTypes = new Type[] { typeof(int), typeof(DateTime) };
 
+        /// <summary>
+        /// Parse source sequence by public properties to table and write it to destination file.
+        /// </summary>
+        /// <typeparam name="T">Type of object to parse.</typeparam>
+        /// <param name="source">The source sequence.</param>
+        /// <param name="path">The destination file path.</param>
+        /// <exception cref="ArgumentNullException">Throws when source is null.</exception>
+        /// <exception cref="ArgumentException">Throws when destination path is null or empty or whitespace.</exception>
         public static void ParseToFile<T>(IEnumerable<T> source, string path)
         {
             if (source is null)
@@ -32,7 +44,36 @@ namespace CreateTableOfRecordsTypeOfT
                 parsedData.Add(ParseData(item));
             }
 
-            WriteToFile(parsedData, typeof(T), path);
+            using var destinationFile = new StreamWriter(path, false, Encoding.UTF8);
+
+            WriteTable(parsedData, typeof(T), destinationFile);
+        }
+
+        /// <summary>
+        /// Parse source sequence by public properties to table and output it to <see cref="Console"/>.
+        /// </summary>
+        /// <typeparam name="T">Type of object to parse.</typeparam>
+        /// <param name="source">The source sequence.</param>
+        /// <exception cref="ArgumentNullException">Throws when source is null.</exception>
+        public static void ParseToConsole<T>(IEnumerable<T> source)
+        {
+            if (source is null)
+            {
+                throw new ArgumentNullException(nameof(source), "Source is null");
+            }
+
+            var parsedData = new List<string>();
+
+            foreach (var item in source)
+            {
+                parsedData.Add(ParseData(item));
+            }
+
+            using var destinationConsole = new StreamWriter(Console.OpenStandardOutput(), Encoding.UTF8);
+            destinationConsole.AutoFlush = true;
+            Console.SetOut(destinationConsole);
+
+            WriteTable(parsedData, typeof(T), destinationConsole);
         }
 
         private static string ParseData<T>(T data)
@@ -56,16 +97,13 @@ namespace CreateTableOfRecordsTypeOfT
             return sBuilder.ToString().TrimEnd(',');
         }
 
-        private static void WriteToFile(IEnumerable<string> data, Type dataType, string path)
+        private static void WriteTable(IEnumerable<string> data, Type dataType, StreamWriter destination)
         {
             var propertiesInfo = FindMaximumDataLength(data, ParseProperties(dataType));
-            var tableWidth = Math.Max(propertiesInfo.Sum(x => x.propertyName.Length), propertiesInfo.Sum(x => x.maxLength)) + (3 * propertiesInfo.Length) + 1;
+            var tableWidth = Math.Max(propertiesInfo.Sum(x => x.propertyName.Length), propertiesInfo.Sum(x => x.maxLength)) + (CountOfAdditionalCharactersToEachEntry * propertiesInfo.Length) + 1;
 
-            using var destinationStreamWriter = new StreamWriter(path, false, Encoding.UTF8);
-            destinationStreamWriter.AutoFlush = true;
-
-            WriteFileHeader(destinationStreamWriter, tableWidth, propertiesInfo);
-            WriteFileBody(destinationStreamWriter, tableWidth, data, propertiesInfo);
+            WriteTableHeader(destination, tableWidth, propertiesInfo);
+            WriteTableBody(destination, tableWidth, data, propertiesInfo);
         }
 
         private static PropertyInfo[] ParseProperties(Type dataType)
@@ -83,7 +121,7 @@ namespace CreateTableOfRecordsTypeOfT
             return propertyNames.ToArray();
         }
 
-        private static void WriteFileHeader(StreamWriter writer, int tableWidth, (string propertyName, bool paddingLeft, int maxLength)[] propertiesInfo)
+        private static void WriteTableHeader(StreamWriter writer, int tableWidth, (string propertyName, bool paddingLeft, int maxLength)[] propertiesInfo)
         {
             writer.WriteLine(new string('-', tableWidth));
 
@@ -99,7 +137,7 @@ namespace CreateTableOfRecordsTypeOfT
             writer.WriteLine(new string('-', tableWidth));
         }
 
-        private static void WriteFileBody(StreamWriter writer, int tableWidth, IEnumerable<string> data, (string propertyName, bool paddingLeft, int maxLength)[] propertiesInfo)
+        private static void WriteTableBody(StreamWriter writer, int tableWidth, IEnumerable<string> data, (string propertyName, bool paddingLeft, int maxLength)[] propertiesInfo)
         {
             foreach (var record in data)
             {
